@@ -1,0 +1,15 @@
+{
+  "name": "jidex-2026",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JIDEX 2026 - Jakarta International Design Exhibition",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=@jidex/web",
+    "build:web": "npm run build --workspace=@jidex/web",
+    "lint:web": "npm run lint --workspace=@jidex/web"
+  }
+}
