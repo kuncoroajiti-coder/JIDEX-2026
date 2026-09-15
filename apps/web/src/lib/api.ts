@@ -6,9 +6,16 @@ async function apiFetch<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
-  const response = await fetch(API_BASE_URL + path, {
-    ...options,
-    headers: {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => {
+    controller.abort();
+  }, 10000);
+
+  try {
+    const response = await fetch(API_BASE_URL + path, {
+      ...options,
+      signal: controller.signal,
+      headers: {
       Accept: "application/json",
       ...(options?.body
         ? { "Content-Type": "application/json" }
@@ -46,12 +53,78 @@ async function apiFetch<T>(
     throw new Error(message);
   }
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
+    if (response.status === 204) {
+      return undefined as T;
+    }
 
-  return response.json() as Promise<T>;
+    return response.json() as Promise<T>;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
+
+/* Auth */
+
+export type AuthRole =
+  | "PARTICIPANT"
+  | "OPERATOR"
+  | "ADMIN";
+
+export type AuthStatus =
+  | "ACTIVE"
+  | "INACTIVE";
+
+export type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: AuthRole;
+  status: AuthStatus;
+};
+
+export type RegisterInput = {
+  name: string;
+  email: string;
+  password: string;
+};
+
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  try {
+    return await apiFetch<AuthUser>("/api/v1/auth/me");
+  } catch {
+    return null;
+  }
+}
+
+export async function login(
+  email: string,
+  password: string,
+): Promise<AuthUser> {
+  return apiFetch<AuthUser>("/api/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify({
+      email,
+      password,
+    }),
+  });
+}
+
+export async function register(
+  input: RegisterInput,
+): Promise<AuthUser> {
+  return apiFetch<AuthUser>("/api/v1/auth/register", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function logout(): Promise<void> {
+  await apiFetch<void>("/api/v1/auth/logout", {
+    method: "POST",
+  });
+}
+
+/* Public content */
 
 export type EventItem = {
   id: string;
@@ -85,6 +158,20 @@ export type NewsItem = {
   slug: string;
   publishedAt?: string | null;
 };
+
+export async function getEvents(): Promise<EventItem[]> {
+  return apiFetch<EventItem[]>("/api/v1/events");
+}
+
+export async function getSchedules(): Promise<ScheduleItem[]> {
+  return apiFetch<ScheduleItem[]>("/api/v1/schedules");
+}
+
+export async function getNews(): Promise<NewsItem[]> {
+  return apiFetch<NewsItem[]>("/api/v1/news");
+}
+
+/* Admin News */
 
 export type AdminNewsItem = {
   id: string;
@@ -128,18 +215,6 @@ export type NewsTranslationResult = {
   excerptEn: string | null;
   contentEn: string;
 };
-
-export async function getEvents(): Promise<EventItem[]> {
-  return apiFetch<EventItem[]>("/api/v1/events");
-}
-
-export async function getSchedules(): Promise<ScheduleItem[]> {
-  return apiFetch<ScheduleItem[]>("/api/v1/schedules");
-}
-
-export async function getNews(): Promise<NewsItem[]> {
-  return apiFetch<NewsItem[]>("/api/v1/news");
-}
 
 export async function getAdminNews(): Promise<AdminNewsItem[]> {
   return apiFetch<AdminNewsItem[]>("/api/v1/admin/news");

@@ -6,6 +6,7 @@ import cookie from "@fastify/cookie";
 import { z } from "zod";
 import { publicRoutes } from "./routes/public";
 import { newsAdminRoutes } from "./routes/news-admin";
+import { authRoutes } from "./routes/auth";
 
 const envSchema = z.object({
   NODE_ENV: z
@@ -37,6 +38,7 @@ const start = async () => {
 
     await app.register(publicRoutes);
     await app.register(newsAdminRoutes);
+    await app.register(authRoutes);
 
     app.get("/health", async () => ({
       ok: true,

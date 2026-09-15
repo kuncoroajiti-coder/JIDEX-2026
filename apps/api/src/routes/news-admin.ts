@@ -102,6 +102,18 @@ async function translateText(
 }
 
 export async function newsAdminRoutes(app: FastifyInstance) {
+  app.addHook("preHandler", async (request, reply) => {
+    const { authenticate, requireRole } = await import("../lib/auth");
+
+    await authenticate(request, reply);
+
+    if (reply.sent) {
+      return;
+    }
+
+    await requireRole("OPERATOR", "ADMIN")(request, reply);
+  });
+
   app.get("/api/v1/admin/news", async () =>
     prisma.news.findMany({
       orderBy: { updatedAt: "desc" },

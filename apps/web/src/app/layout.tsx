@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Plus_Jakarta_Sans } from "next/font/google";
-
 import { SiteHeader } from "@/components/layout/site-header";
 import { LanguageProvider } from "@/components/i18n/language-provider";
-
+import { AuthProvider } from "@/components/auth/auth-provider";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -33,8 +32,10 @@ export default function RootLayout({
     <html lang="id">
       <body className={`${jakarta.variable} ${cormorant.variable}`}>
         <LanguageProvider>
-          <SiteHeader />
-          {children}
+          <AuthProvider>
+            <SiteHeader />
+            {children}
+          </AuthProvider>
         </LanguageProvider>
       </body>
     </html>

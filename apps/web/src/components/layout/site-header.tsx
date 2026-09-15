@@ -10,6 +10,7 @@ import {
   type Language,
   useLanguage,
 } from "@/components/i18n/language-provider";
+import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
 
 const labels: Record<
@@ -20,8 +21,14 @@ const labels: Record<
     news: string;
     login: string;
     register: string;
+    logout: string;
+    participant: string;
+    operator: string;
+    admin: string;
+    cms: string;
     menu: string;
     close: string;
+    loggingOut: string;
   }
 > = {
   id: {
@@ -30,8 +37,14 @@ const labels: Record<
     news: "Berita",
     login: "Masuk",
     register: "Daftar",
+    logout: "Keluar",
+    participant: "Peserta",
+    operator: "Operator",
+    admin: "Admin",
+    cms: "CMS",
     menu: "Buka menu navigasi",
     close: "Tutup menu navigasi",
+    loggingOut: "Keluar...",
   },
   en: {
     about: "About",
@@ -39,8 +52,14 @@ const labels: Record<
     news: "News",
     login: "Login",
     register: "Register",
+    logout: "Logout",
+    participant: "Participant",
+    operator: "Operator",
+    admin: "Admin",
+    cms: "CMS",
     menu: "Open navigation menu",
     close: "Close navigation menu",
+    loggingOut: "Signing out...",
   },
 };
 
@@ -67,6 +86,7 @@ function LanguageSwitcher() {
         </span>
         <span>ID</span>
       </button>
+
       <button
         type="button"
         onClick={() => setLanguage("en")}
@@ -86,22 +106,69 @@ function LanguageSwitcher() {
   );
 }
 
+function getRoleLabel(
+  role: "PARTICIPANT" | "OPERATOR" | "ADMIN",
+  t: (typeof labels)[Language],
+) {
+  if (role === "ADMIN") {
+    return t.admin;
+  }
+
+  if (role === "OPERATOR") {
+    return t.operator;
+  }
+
+  return t.participant;
+}
+
 export function SiteHeader() {
   const router = useRouter();
   const { language } = useLanguage();
+  const { user, loading, logout } = useAuth();
   const t = labels[language];
+
   const [open, setOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const go = (path: string) => {
     setOpen(false);
     router.push(path);
   };
 
+  async function handleLogout() {
+    if (loggingOut) {
+      return;
+    }
+
+    try {
+      setLoggingOut(true);
+      setOpen(false);
+      await logout();
+      router.push("/");
+      router.refresh();
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+
+  const isStaff =
+    user?.role === "OPERATOR" ||
+    user?.role === "ADMIN";
+
+  const roleLabel = user
+    ? getRoleLabel(user.role, t)
+    : "";
+
   return (
     <header className="sticky top-0 z-50 border-b border-jidex-border/60 bg-white/95 backdrop-blur-xl">
       <Container>
         <nav className="flex min-h-[70px] items-center justify-between gap-5">
-          <Link href="/" aria-label="JIDEX 2026" className="shrink-0">
+          <Link
+            href="/"
+            aria-label="JIDEX 2026"
+            className="shrink-0"
+            onClick={() => setOpen(false)}
+          >
             <Image
               src="/assets/jidex-monocolor.png"
               alt="JIDEX 2026"
@@ -112,41 +179,99 @@ export function SiteHeader() {
             />
           </Link>
 
+          {/* Desktop */}
           <div className="hidden items-center gap-5 md:flex">
             <div className="flex items-center gap-6 text-sm font-medium text-jidex-navy">
-              <Link href="/about" className="transition-colors hover:text-jidex-orange">
+              <Link
+                href="/about"
+                className="transition-colors hover:text-jidex-orange"
+              >
                 {t.about}
               </Link>
-              <Link href="/program" className="transition-colors hover:text-jidex-orange">
+
+              <Link
+                href="/program"
+                className="transition-colors hover:text-jidex-orange"
+              >
                 {t.program}
               </Link>
-              <Link href="/news" className="transition-colors hover:text-jidex-orange">
+
+              <Link
+                href="/news"
+                className="transition-colors hover:text-jidex-orange"
+              >
                 {t.news}
               </Link>
             </div>
 
             <div className="h-6 w-px bg-jidex-border" />
+
             <LanguageSwitcher />
 
-            <Button
-              variant="outline"
-              size="sm"
-              type="button"
-              onClick={() => go("/login")}
-            >
-              {t.login}
-            </Button>
-            <Button
-              size="sm"
-              type="button"
-              onClick={() => go("/register")}
-            >
-              {t.register}
-            </Button>
+            {loading ? (
+              <div className="h-9 w-28 animate-pulse rounded-full bg-slate-100" />
+            ) : user ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 rounded-full border border-jidex-border bg-white px-3 py-1.5">
+                  <span
+                    className="max-w-[150px] truncate text-sm font-semibold text-jidex-navy"
+                    title={user.name}
+                  >
+                    {user.name}
+                  </span>
+
+                  <span className="rounded-full bg-jidex-surface px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-jidex-navy">
+                    {roleLabel}
+                  </span>
+                </div>
+
+                {isStaff && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => go("/operator/news")}
+                  >
+                    {t.cms}
+                  </Button>
+                )}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  disabled={loggingOut}
+                >
+                  {loggingOut ? t.loggingOut : t.logout}
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => go("/login")}
+                >
+                  {t.login}
+                </Button>
+
+                <Button
+                  size="sm"
+                  type="button"
+                  onClick={() => go("/register")}
+                >
+                  {t.register}
+                </Button>
+              </>
+            )}
           </div>
 
+          {/* Mobile */}
           <div className="flex items-center gap-3 md:hidden">
             <LanguageSwitcher />
+
             <button
               type="button"
               aria-label={open ? t.close : t.menu}
@@ -173,6 +298,7 @@ export function SiteHeader() {
               >
                 {t.about}
               </Link>
+
               <Link
                 href="/program"
                 onClick={() => setOpen(false)}
@@ -180,6 +306,7 @@ export function SiteHeader() {
               >
                 {t.program}
               </Link>
+
               <Link
                 href="/news"
                 onClick={() => setOpen(false)}
@@ -188,25 +315,68 @@ export function SiteHeader() {
                 {t.news}
               </Link>
 
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  className="w-full"
-                  onClick={() => go("/login")}
-                >
-                  {t.login}
-                </Button>
-                <Button
-                  size="sm"
-                  type="button"
-                  className="w-full"
-                  onClick={() => go("/register")}
-                >
-                  {t.register}
-                </Button>
-              </div>
+              {!loading && user && (
+                <div className="mt-2 rounded-2xl border border-jidex-border bg-jidex-surface/50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-jidex-navy">
+                        {user.name}
+                      </p>
+                      <p className="mt-1 text-xs font-medium text-jidex-text-muted">
+                        {roleLabel}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-2">
+                    {isStaff && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        className="w-full"
+                        onClick={() => go("/operator/news")}
+                      >
+                        {t.cms}
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      className="w-full"
+                      onClick={() => void handleLogout()}
+                      disabled={loggingOut}
+                    >
+                      {loggingOut ? t.loggingOut : t.logout}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {!loading && !user && (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    className="w-full"
+                    onClick={() => go("/login")}
+                  >
+                    {t.login}
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    type="button"
+                    className="w-full"
+                    onClick={() => go("/register")}
+                  >
+                    {t.register}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         )}
