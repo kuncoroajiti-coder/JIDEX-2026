@@ -49,6 +49,7 @@
   --color-jidex-border: var(--jidex-border);
 
   --font-sans: var(--font-jidex-sans);
+  --font-display: var(--font-jidex-display);
 }
 
 * {
