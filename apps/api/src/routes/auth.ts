@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+
 import { prisma } from "../lib/prisma";
 import { hashPassword, verifyPassword } from "../lib/password";
 import {
@@ -65,6 +66,22 @@ async function createSession(userId: string) {
   return { token, expiresAt };
 }
 
+async function ensureParticipantProfile(user: {
+  id: string;
+  name: string;
+}) {
+  return prisma.participant.upsert({
+    where: {
+      userId: user.id,
+    },
+    create: {
+      userId: user.id,
+      fullName: user.name,
+    },
+    update: {},
+  });
+}
+
 export async function authRoutes(app: FastifyInstance) {
   app.post("/api/v1/auth/register", async (request, reply) => {
     const parsed = authSchema.safeParse(request.body);
@@ -97,6 +114,11 @@ export async function authRoutes(app: FastifyInstance) {
         passwordHash,
         role: "PARTICIPANT",
         status: "ACTIVE",
+        participant: {
+          create: {
+            fullName: name,
+          },
+        },
       },
     });
 
@@ -147,6 +169,10 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.status(403).send({
         error: "User account is inactive",
       });
+    }
+
+    if (user.role === "PARTICIPANT") {
+      await ensureParticipantProfile(user);
     }
 
     const { token, expiresAt } = await createSession(user.id);

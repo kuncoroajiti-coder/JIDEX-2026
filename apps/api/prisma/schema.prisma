@@ -29,21 +29,44 @@ enum ContentStatus {
   ARCHIVED
 }
 
-model User {
-  id                 String              @id @default(cuid())
-  name               String
-  email              String              @unique
-  passwordHash       String
-  role               UserRole            @default(PARTICIPANT)
-  status             UserStatus          @default(ACTIVE)
-  emailVerifiedAt    DateTime?
-  lastLoginAt        DateTime?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  DECISION_MADE
+  WITHDRAWN
+}
 
-  participant        Participant?
-  auditLogs          AuditLog[]
-  sessions           Session[]
+enum ArtworkStatus {
+  DRAFT
+  SUBMITTED
+  SELECTED
+  NOT_SELECTED
+}
+
+enum MaterialType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+  PORTFOLIO
+  OTHER
+}
+
+model User {
+  id              String      @id @default(cuid())
+  name            String
+  email           String      @unique
+  passwordHash    String
+  role            UserRole    @default(PARTICIPANT)
+  status          UserStatus  @default(ACTIVE)
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  participant Participant?
+  auditLogs   AuditLog[]
+  sessions    Session[]
 
   @@index([role])
   @@index([status])
@@ -51,41 +74,155 @@ model User {
 }
 
 model Participant {
-  id                 String         @id @default(cuid())
-  userId             String         @unique
-  fullName           String
-  institution        String?
-  position           String?
-  phone              String?
-  country            String?
-  city               String?
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  fullName    String
+  position    String?
+  institution String?
+  phone       String?
+  country     String?
+  city        String?
+  website     String?
+  socialMedia String?
 
-  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  registrations      Registration[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  registrations Registration[]
+  submissions   ExhibitorSubmission[]
 
   @@index([institution])
+  @@index([country])
+  @@index([city])
   @@map("participants")
 }
 
-model Event {
-  id                 String         @id @default(cuid())
-  slug               String         @unique
-  titleId            String
-  titleEn            String
-  descriptionId      String?
-  descriptionEn      String?
-  startAt            DateTime
-  endAt              DateTime
-  venueId            String?
-  isPublished        Boolean        @default(false)
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+model ExhibitorSubmission {
+  id            String           @id @default(cuid())
+  participantId String           @unique
+  status        SubmissionStatus @default(DRAFT)
 
-  venue              Venue?         @relation(fields: [venueId], references: [id], onDelete: SetNull)
-  schedules          Schedule[]
-  registrations      Registration[]
+  submittedAt  DateTime?
+  reviewedAt   DateTime?
+  decidedAt    DateTime?
+  reviewerNote String?
+
+  declarationAccurate   Boolean @default(false)
+  declarationOriginal    Boolean @default(false)
+  declarationDeadline   Boolean @default(false)
+  declarationTechnical  Boolean @default(false)
+  declarationGuidelines Boolean @default(false)
+  declarationIp         Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  artworks   Artwork[]
+
+  @@index([status])
+  @@index([submittedAt])
+  @@map("exhibitor_submissions")
+}
+
+model Artwork {
+  id           String        @id @default(cuid())
+  submissionId String
+  sequence     Int
+  status       ArtworkStatus @default(DRAFT)
+
+  title             String
+  year              Int?
+  category          String?
+  medium            String?
+  dimensions        String?
+  materials         String?
+  duration          String?
+  shortDescription  String?
+  designConcept     String?
+  keywords          String?
+
+  physicalWidthCm   Decimal? @db.Decimal(10, 2)
+  physicalHeightCm  Decimal? @db.Decimal(10, 2)
+  physicalDepthCm   Decimal? @db.Decimal(10, 2)
+  weightKg          Decimal? @db.Decimal(10, 2)
+
+  installationType       String?
+  installationHeight     String?
+  viewingDistance        String?
+  mountingMethod         String?
+  lightingRequirements   String?
+  powerRequirements      String?
+  specialToolsEquipment  String?
+  safetyConsiderations   String?
+  installationArea       String?
+  componentCount         Int?
+  installationTime       String?
+
+  technicalRequirements  String?
+  hardwareRequirements   String?
+  softwareRequirements   String?
+  displayRequirements    String?
+  internetRequirements  String?
+  installationInstructions String?
+  userInteractionInstructions String?
+
+  selectionNote String?
+  selectedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  submission        ExhibitorSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  supportingMaterials SupportingMaterial[]
+
+  @@unique([submissionId, sequence])
+  @@index([submissionId])
+  @@index([status])
+  @@index([category])
+  @@map("artworks")
+}
+
+model SupportingMaterial {
+  id        String       @id @default(cuid())
+  artworkId String
+
+  type       MaterialType
+  title      String?
+  fileName   String
+  fileUrl    String
+  mimeType   String?
+  fileSize   Int?
+  sortOrder  Int          @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  artwork Artwork @relation(fields: [artworkId], references: [id], onDelete: Cascade)
+
+  @@index([artworkId])
+  @@index([type])
+  @@map("supporting_materials")
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  titleId     String
+  titleEn     String
+  descriptionId String?
+  descriptionEn String?
+  startAt     DateTime
+  endAt       DateTime
+  venueId     String?
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  venue         Venue?         @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  schedules     Schedule[]
+  registrations Registration[]
 
   @@index([startAt])
   @@index([isPublished])
@@ -93,22 +230,22 @@ model Event {
 }
 
 model Schedule {
-  id                 String         @id @default(cuid())
-  eventId            String?
-  titleId            String
-  titleEn            String
-  descriptionId      String?
-  descriptionEn      String?
-  startAt            DateTime
-  endAt              DateTime
-  venueId            String?
-  isPublished        Boolean        @default(true)
-  sortOrder          Int            @default(0)
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  id            String   @id @default(cuid())
+  eventId       String?
+  titleId       String
+  titleEn       String
+  descriptionId String?
+  descriptionEn String?
+  startAt       DateTime
+  endAt         DateTime
+  venueId       String?
+  isPublished   Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  event              Event?         @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  venue              Venue?         @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  event Event? @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  venue Venue? @relation(fields: [venueId], references: [id], onDelete: SetNull)
 
   @@index([startAt])
   @@index([eventId])
@@ -117,51 +254,51 @@ model Schedule {
 }
 
 model News {
-  id                 String         @id @default(cuid())
-  slug               String         @unique
-  titleId            String
-  titleEn            String
-  excerptId          String?
-  excerptEn          String?
-  contentId          String
-  contentEn          String
-  coverImage         String?
-  status             ContentStatus  @default(DRAFT)
-  publishedAt        DateTime?
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  titleId     String
+  titleEn     String
+  excerptId   String?
+  excerptEn   String?
+  contentId   String
+  contentEn   String
+  coverImage  String?
+  status      ContentStatus @default(DRAFT)
+  publishedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   @@index([status, publishedAt])
   @@map("news")
 }
 
 model Page {
-  id                 String         @id @default(cuid())
-  slug               String         @unique
-  titleId            String
-  titleEn            String
-  contentId          String
-  contentEn          String
-  status             ContentStatus  @default(DRAFT)
-  updatedById        String?
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  titleId     String
+  titleEn     String
+  contentId   String
+  contentEn   String
+  status      ContentStatus @default(DRAFT)
+  updatedById String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   @@index([status])
   @@map("pages")
 }
 
 model Registration {
-  id                 String             @id @default(cuid())
-  participantId      String
-  eventId            String?
-  status             RegistrationStatus @default(PENDING)
-  notes              String?
-  registeredAt       DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  id            String             @id @default(cuid())
+  participantId String
+  eventId       String?
+  status        RegistrationStatus @default(PENDING)
+  notes         String?
+  registeredAt  DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
-  participant        Participant        @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  event              Event?             @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  event       Event?      @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
   @@index([participantId])
   @@index([eventId])
@@ -170,60 +307,60 @@ model Registration {
 }
 
 model Venue {
-  id                 String         @id @default(cuid())
-  name               String
-  addressId          String?
-  addressEn          String?
-  city               String?
-  country            String?
-  latitude           Decimal?       @db.Decimal(10, 7)
-  longitude          Decimal?       @db.Decimal(10, 7)
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  addressId String?
+  addressEn String?
+  city      String?
+  country   String?
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  events             Event[]
-  schedules          Schedule[]
+  events    Event[]
+  schedules Schedule[]
 
   @@index([city])
   @@map("venues")
 }
 
 model Contact {
-  id                 String         @id @default(cuid())
-  labelId            String
-  labelEn            String
-  value              String
-  type               String
-  isPublished        Boolean        @default(true)
-  sortOrder          Int            @default(0)
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  id          String   @id @default(cuid())
+  labelId     String
+  labelEn     String
+  value       String
+  type        String
+  isPublished Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([type, isPublished, sortOrder])
   @@map("contacts")
 }
 
 model Setting {
-  id                 String         @id @default(cuid())
-  key                String         @unique
-  value              String
-  description        String?
-  updatedAt          DateTime       @updatedAt
-  createdAt          DateTime       @default(now())
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
 
   @@map("settings")
 }
 
 model AuditLog {
-  id                 String         @id @default(cuid())
-  userId             String?
-  action             String
-  entity             String
-  entityId           String?
-  metadata           Json?
-  createdAt          DateTime       @default(now())
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
 
-  user               User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([entity, entityId])
@@ -232,14 +369,14 @@ model AuditLog {
 }
 
 model Session {
-  id                 String         @id @default(cuid())
-  userId             String
-  tokenHash          String         @unique
-  expiresAt          DateTime
-  createdAt          DateTime       @default(now())
-  lastUsedAt         DateTime?
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
 
-  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])

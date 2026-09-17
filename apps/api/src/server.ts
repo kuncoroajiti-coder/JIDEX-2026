@@ -1,4 +1,5 @@
 import "dotenv/config";
+
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -7,6 +8,8 @@ import { z } from "zod";
 import { publicRoutes } from "./routes/public";
 import { newsAdminRoutes } from "./routes/news-admin";
 import { authRoutes } from "./routes/auth";
+import { participantRoutes } from "./routes/participant";
+import { importRoutes } from "./routes/import";
 
 const envSchema = z.object({
   NODE_ENV: z
@@ -27,7 +30,9 @@ const app = Fastify({
 
 const start = async () => {
   try {
-    await app.register(helmet);
+    await app.register(helmet, {
+      contentSecurityPolicy: false,
+    });
 
     await app.register(cors, {
       origin: env.WEB_ORIGIN,
@@ -39,6 +44,8 @@ const start = async () => {
     await app.register(publicRoutes);
     await app.register(newsAdminRoutes);
     await app.register(authRoutes);
+    await app.register(participantRoutes);
+    await app.register(importRoutes);
 
     app.get("/health", async () => ({
       ok: true,
