@@ -1,45 +1,69 @@
 import "dotenv/config";
+
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import { randomBytes, scrypt as scryptCallback } from "node:crypto";
-import { promisify } from "node:util";
-
-const scrypt = promisify(scryptCallback);
-
-async function hashPassword(password: string) {
-  const salt = randomBytes(16).toString("hex");
-  const derivedKey = (await scrypt(password, salt, 64)) as Buffer;
-  return `${salt}:${derivedKey.toString("hex")}`;
-}
+import { hashPassword } from "../src/lib/password";
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
-  const email = process.env.JIDEX_OPERATOR_EMAIL;
-  const password = process.env.JIDEX_OPERATOR_PASSWORD;
+  const email = process.env.JIDEX_ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.JIDEX_ADMIN_PASSWORD;
 
-  if (!databaseUrl) throw new Error("DATABASE_URL is not configured");
-  if (!email) throw new Error("JIDEX_OPERATOR_EMAIL is not configured");
-  if (!password) throw new Error("JIDEX_OPERATOR_PASSWORD is not configured");
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL is not configured");
+  }
 
-  const adapter = new PrismaPg({ connectionString: databaseUrl });
+  if (!email) {
+    throw new Error("JIDEX_ADMIN_EMAIL is not configured");
+  }
+
+  if (!password) {
+    throw new Error("JIDEX_ADMIN_PASSWORD is not configured");
+  }
+
+  if (password.length < 8 || password.length > 128) {
+    throw new Error("JIDEX_ADMIN_PASSWORD must be 8-128 characters");
+  }
+
+  const adapter = new PrismaPg({
+    connectionString: databaseUrl,
+  });
+
   const prisma = new PrismaClient({ adapter });
 
   try {
     const passwordHash = await hashPassword(password);
 
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        role: true,
+      },
+    });
+
+    if (
+      existingUser &&
+      existingUser.role !== "ADMIN"
+    ) {
+      throw new Error(
+        `Refusing to promote existing non-admin account ${email}`,
+      );
+    }
+
     const user = await prisma.user.upsert({
       where: { email },
       update: {
-        name: "JIDEX Operator",
+        name: "JIDEX Administrator",
         passwordHash,
-        role: "OPERATOR",
+        role: "ADMIN",
         status: "ACTIVE",
       },
       create: {
-        name: "JIDEX Operator",
+        name: "JIDEX Administrator",
         email,
         passwordHash,
-        role: "OPERATOR",
+        role: "ADMIN",
         status: "ACTIVE",
       },
       select: {
@@ -51,7 +75,7 @@ async function main() {
       },
     });
 
-    console.log("JIDEX OPERATOR READY");
+    console.log("JIDEX ADMIN READY");
     console.log(JSON.stringify(user, null, 2));
   } finally {
     await prisma.$disconnect();
