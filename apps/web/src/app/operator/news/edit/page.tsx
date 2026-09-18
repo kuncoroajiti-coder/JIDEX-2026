@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+
 import {
   deleteAdminNews,
   getAdminNewsById,
@@ -22,9 +24,7 @@ type FormState = {
   publishedAt: string;
 };
 
-function toLocalDateTimeValue(
-  value: string | null | undefined,
-): string {
+function toLocalDateTimeValue(value: string | null | undefined): string {
   if (!value) return "";
 
   const date = new Date(value);
@@ -34,16 +34,12 @@ function toLocalDateTimeValue(
   }
 
   const offset = date.getTimezoneOffset();
-  const localDate = new Date(
-    date.getTime() - offset * 60 * 1000,
-  );
+  const localDate = new Date(date.getTime() - offset * 60 * 1000);
 
   return localDate.toISOString().slice(0, 16);
 }
 
-function toIsoDateTime(
-  value: string,
-): string | null {
+function toIsoDateTime(value: string): string | null {
   if (!value) return null;
 
   const date = new Date(value);
@@ -69,12 +65,11 @@ function itemToForm(item: AdminNewsItem): FormState {
   };
 }
 
-export default function EditNewsPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const [id, setId] = useState<string>("");
+export default function EditNewsPage() {
+  const searchParams = useSearchParams();
+  const requestedId = searchParams.get("id") ?? "";
+
+  const [id, setId] = useState("");
   const [item, setItem] = useState<AdminNewsItem | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,16 +83,19 @@ export default function EditNewsPage({
     let cancelled = false;
 
     async function load() {
+      if (!requestedId) {
+        setError("ID berita tidak ditemukan.");
+        setLoading(false);
+        return;
+      }
+
       try {
-        const resolvedParams = await params;
+        setLoading(true);
+        setError("");
+        setSuccess("");
+        setId(requestedId);
 
-        if (cancelled) return;
-
-        setId(resolvedParams.id);
-
-        const data = await getAdminNewsById(
-          resolvedParams.id,
-        );
+        const data = await getAdminNewsById(requestedId);
 
         if (cancelled) return;
 
@@ -110,6 +108,8 @@ export default function EditNewsPage({
               ? err.message
               : "Gagal memuat berita.",
           );
+          setItem(null);
+          setForm(null);
         }
       } finally {
         if (!cancelled) {
@@ -123,12 +123,9 @@ export default function EditNewsPage({
     return () => {
       cancelled = true;
     };
-  }, [params]);
+  }, [requestedId]);
 
-  function updateField(
-    field: keyof FormState,
-    value: string,
-  ) {
+  function updateField(field: keyof FormState, value: string) {
     setForm((current) =>
       current
         ? {
@@ -191,9 +188,7 @@ export default function EditNewsPage({
     }
   }
 
-  async function handleSave(
-    status: "DRAFT" | "PUBLISHED",
-  ) {
+  async function handleSave(status: "DRAFT" | "PUBLISHED") {
     if (!form || !id) return;
 
     if (!form.slug.trim()) {
@@ -309,6 +304,7 @@ export default function EditNewsPage({
           <p className="text-red-600">
             {error || "Berita tidak ditemukan."}
           </p>
+
           <Link
             href="/operator/news"
             className="mt-6 inline-flex rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold !text-white"
@@ -375,6 +371,7 @@ export default function EditNewsPage({
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
                 Metadata
               </p>
+
               <h2 className="mt-2 text-xl font-semibold text-slate-950">
                 Informasi berita
               </h2>
@@ -385,6 +382,7 @@ export default function EditNewsPage({
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
                   Slug
                 </span>
+
                 <input
                   value={form.slug}
                   onChange={(event) =>
@@ -398,13 +396,11 @@ export default function EditNewsPage({
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
                   Cover Image URL
                 </span>
+
                 <input
                   value={form.coverImage}
                   onChange={(event) =>
-                    updateField(
-                      "coverImage",
-                      event.target.value,
-                    )
+                    updateField("coverImage", event.target.value)
                   }
                   placeholder="https://..."
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
@@ -415,14 +411,12 @@ export default function EditNewsPage({
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
                   Published At
                 </span>
+
                 <input
                   type="datetime-local"
                   value={form.publishedAt}
                   onChange={(event) =>
-                    updateField(
-                      "publishedAt",
-                      event.target.value,
-                    )
+                    updateField("publishedAt", event.target.value)
                   }
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
                 />
@@ -436,6 +430,7 @@ export default function EditNewsPage({
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
                   Bahasa Indonesia
                 </p>
+
                 <h2 className="mt-2 text-xl font-semibold text-slate-950">
                   Konten utama
                 </h2>
@@ -446,13 +441,11 @@ export default function EditNewsPage({
                   <span className="mb-2 block text-sm font-semibold text-slate-700">
                     Judul
                   </span>
+
                   <input
                     value={form.titleId}
                     onChange={(event) =>
-                      updateField(
-                        "titleId",
-                        event.target.value,
-                      )
+                      updateField("titleId", event.target.value)
                     }
                     className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
                   />
@@ -462,13 +455,11 @@ export default function EditNewsPage({
                   <span className="mb-2 block text-sm font-semibold text-slate-700">
                     Ringkasan
                   </span>
+
                   <textarea
                     value={form.excerptId}
                     onChange={(event) =>
-                      updateField(
-                        "excerptId",
-                        event.target.value,
-                      )
+                      updateField("excerptId", event.target.value)
                     }
                     rows={4}
                     className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
@@ -479,13 +470,11 @@ export default function EditNewsPage({
                   <span className="mb-2 block text-sm font-semibold text-slate-700">
                     Konten
                   </span>
+
                   <textarea
                     value={form.contentId}
                     onChange={(event) =>
-                      updateField(
-                        "contentId",
-                        event.target.value,
-                      )
+                      updateField("contentId", event.target.value)
                     }
                     rows={14}
                     className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
@@ -500,9 +489,11 @@ export default function EditNewsPage({
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
                     English
                   </p>
+
                   <h2 className="mt-2 text-xl font-semibold text-slate-950">
                     English version
                   </h2>
+
                   <p className="mt-2 text-sm leading-6 text-slate-500">
                     Generate otomatis dari konten Bahasa Indonesia,
                     lalu review sebelum disimpan.
@@ -512,14 +503,10 @@ export default function EditNewsPage({
                 <button
                   type="button"
                   onClick={handleGenerateEnglish}
-                  disabled={
-                    translating || saving || deleting
-                  }
+                  disabled={translating || saving || deleting}
                   className="shrink-0 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold !text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {translating
-                    ? "Generating..."
-                    : "Generate English"}
+                  {translating ? "Generating..." : "Generate English"}
                 </button>
               </div>
 
@@ -528,13 +515,11 @@ export default function EditNewsPage({
                   <span className="mb-2 block text-sm font-semibold text-slate-700">
                     Title
                   </span>
+
                   <input
                     value={form.titleEn}
                     onChange={(event) =>
-                      updateField(
-                        "titleEn",
-                        event.target.value,
-                      )
+                      updateField("titleEn", event.target.value)
                     }
                     className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
                   />
@@ -544,13 +529,11 @@ export default function EditNewsPage({
                   <span className="mb-2 block text-sm font-semibold text-slate-700">
                     Excerpt
                   </span>
+
                   <textarea
                     value={form.excerptEn}
                     onChange={(event) =>
-                      updateField(
-                        "excerptEn",
-                        event.target.value,
-                      )
+                      updateField("excerptEn", event.target.value)
                     }
                     rows={4}
                     className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
@@ -561,13 +544,11 @@ export default function EditNewsPage({
                   <span className="mb-2 block text-sm font-semibold text-slate-700">
                     Content
                   </span>
+
                   <textarea
                     value={form.contentEn}
                     onChange={(event) =>
-                      updateField(
-                        "contentEn",
-                        event.target.value,
-                      )
+                      updateField("contentEn", event.target.value)
                     }
                     rows={14}
                     className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
@@ -601,9 +582,7 @@ export default function EditNewsPage({
                 disabled={saving || translating || deleting}
                 className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold !text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {saving
-                  ? "Menyimpan..."
-                  : "Publikasikan"}
+                {saving ? "Menyimpan..." : "Publikasikan"}
               </button>
             </div>
           </section>

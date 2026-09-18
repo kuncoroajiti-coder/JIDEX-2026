@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-
 import { Container } from "@/components/layout/container";
 import {
   type Language,
@@ -21,11 +20,13 @@ const labels: Record<
     news: string;
     login: string;
     register: string;
+    submissionForm: string;
     logout: string;
     participant: string;
     operator: string;
     admin: string;
     cms: string;
+    portal: string;
     menu: string;
     close: string;
     loggingOut: string;
@@ -37,11 +38,13 @@ const labels: Record<
     news: "Berita",
     login: "Masuk",
     register: "Daftar",
+    submissionForm: "Buka Formulir Pengajuan",
     logout: "Keluar",
     participant: "Peserta",
     operator: "Operator",
     admin: "Admin",
     cms: "CMS",
+    portal: "Portal Peserta",
     menu: "Buka menu navigasi",
     close: "Tutup menu navigasi",
     loggingOut: "Keluar...",
@@ -52,11 +55,13 @@ const labels: Record<
     news: "News",
     login: "Login",
     register: "Register",
+    submissionForm: "Open Submission Form",
     logout: "Logout",
     participant: "Participant",
     operator: "Operator",
     admin: "Admin",
     cms: "CMS",
+    portal: "Participant Portal",
     menu: "Open navigation menu",
     close: "Close navigation menu",
     loggingOut: "Signing out...",
@@ -121,6 +126,65 @@ function getRoleLabel(
   return t.participant;
 }
 
+function AccountInfo({
+  name,
+  email,
+  roleLabel,
+  mobile = false,
+}: {
+  name: string;
+  email: string;
+  roleLabel: string;
+  mobile?: boolean;
+}) {
+  if (mobile) {
+    return (
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-semibold text-jidex-navy">
+            {name}
+          </p>
+
+          <span className="shrink-0 rounded-full bg-jidex-surface px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-jidex-navy">
+            {roleLabel}
+          </span>
+        </div>
+
+        <p
+          className="mt-1 truncate text-xs font-medium text-jidex-text-muted"
+          title={email}
+        >
+          {email}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-w-0 max-w-[230px]">
+      <div className="flex items-center gap-2">
+        <span
+          className="truncate text-sm font-semibold text-jidex-navy"
+          title={name}
+        >
+          {name}
+        </span>
+
+        <span className="shrink-0 rounded-full bg-jidex-surface px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-jidex-navy">
+          {roleLabel}
+        </span>
+      </div>
+
+      <p
+        className="mt-0.5 truncate text-[11px] font-medium text-jidex-text-muted"
+        title={email}
+      >
+        {email}
+      </p>
+    </div>
+  );
+}
+
 export function SiteHeader() {
   const router = useRouter();
   const { language } = useLanguage();
@@ -155,6 +219,10 @@ export function SiteHeader() {
     user?.role === "OPERATOR" ||
     user?.role === "ADMIN";
 
+  const isParticipant = user?.role === "PARTICIPANT";
+  const googleFormUrl =
+    process.env.NEXT_PUBLIC_JIDEX_GOOGLE_FORM_URL || "";
+
   const roleLabel = user
     ? getRoleLabel(user.role, t)
     : "";
@@ -179,7 +247,6 @@ export function SiteHeader() {
             />
           </Link>
 
-          {/* Desktop */}
           <div className="hidden items-center gap-5 md:flex">
             <div className="flex items-center gap-6 text-sm font-medium text-jidex-navy">
               <Link
@@ -209,21 +276,31 @@ export function SiteHeader() {
             <LanguageSwitcher />
 
             {loading ? (
-              <div className="h-9 w-28 animate-pulse rounded-full bg-slate-100" />
+              <div className="h-10 w-44 animate-pulse rounded-full bg-slate-100" />
             ) : user ? (
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 rounded-full border border-jidex-border bg-white px-3 py-1.5">
-                  <span
-                    className="max-w-[150px] truncate text-sm font-semibold text-jidex-navy"
-                    title={user.name}
+                {isParticipant ? (
+                  <button
+                    type="button"
+                    onClick={() => go("/participant")}
+                    title={t.portal}
+                    className="rounded-full border border-jidex-border bg-white px-4 py-2 text-left transition hover:border-jidex-blue-light hover:bg-jidex-surface"
                   >
-                    {user.name}
-                  </span>
-
-                  <span className="rounded-full bg-jidex-surface px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-jidex-navy">
-                    {roleLabel}
-                  </span>
-                </div>
+                    <AccountInfo
+                      name={user.name}
+                      email={user.email}
+                      roleLabel={roleLabel}
+                    />
+                  </button>
+                ) : (
+                  <div className="rounded-full border border-jidex-border bg-white px-4 py-2">
+                    <AccountInfo
+                      name={user.name}
+                      email={user.email}
+                      roleLabel={roleLabel}
+                    />
+                  </div>
+                )}
 
                 {isStaff && (
                   <Button
@@ -260,15 +337,20 @@ export function SiteHeader() {
                 <Button
                   size="sm"
                   type="button"
-                  onClick={() => go("/register")}
+                  onClick={() => {
+                    if (isParticipant && googleFormUrl) {
+                      window.open(googleFormUrl, "_blank", "noopener,noreferrer");
+                      return;
+                    }
+                    go("/register");
+                  }}
                 >
-                  {t.register}
+                  {isParticipant ? t.submissionForm : t.register}
                 </Button>
               </>
             )}
           </div>
 
-          {/* Mobile */}
           <div className="flex items-center gap-3 md:hidden">
             <LanguageSwitcher />
 
@@ -317,18 +399,26 @@ export function SiteHeader() {
 
               {!loading && user && (
                 <div className="mt-2 rounded-2xl border border-jidex-border bg-jidex-surface/50 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-jidex-navy">
-                        {user.name}
-                      </p>
-                      <p className="mt-1 text-xs font-medium text-jidex-text-muted">
-                        {roleLabel}
-                      </p>
-                    </div>
-                  </div>
+                  <AccountInfo
+                    name={user.name}
+                    email={user.email}
+                    roleLabel={roleLabel}
+                    mobile
+                  />
 
                   <div className="mt-3 grid gap-2">
+                    {isParticipant && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        className="w-full"
+                        onClick={() => go("/participant")}
+                      >
+                        {t.portal}
+                      </Button>
+                    )}
+
                     {isStaff && (
                       <Button
                         variant="outline"
@@ -371,9 +461,16 @@ export function SiteHeader() {
                     size="sm"
                     type="button"
                     className="w-full"
-                    onClick={() => go("/register")}
+                    onClick={() => {
+                      if (isParticipant && googleFormUrl) {
+                        window.open(googleFormUrl, "_blank", "noopener,noreferrer");
+                        setOpen(false);
+                        return;
+                      }
+                      go("/register");
+                    }}
                   >
-                    {t.register}
+                    {isParticipant ? t.submissionForm : t.register}
                   </Button>
                 </div>
               )}

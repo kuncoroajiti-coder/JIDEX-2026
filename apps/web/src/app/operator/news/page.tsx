@@ -156,7 +156,7 @@ export default function OperatorNewsPage() {
 
                       <td className="px-5 py-4 text-right">
                         <Link
-                          href={`/operator/news/${item.id}`}
+                          href={`/operator/news/edit?id=${item.id}`}
                           className="text-sm font-semibold text-slate-900 hover:underline"
                         >
                           Edit

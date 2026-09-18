@@ -1,15 +1,21 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+
+import { authenticate, requireRole } from "../lib/auth";
 import { prisma } from "../lib/prisma";
+import {
+  translateIdToEn,
+  translateOptionalIdToEn,
+} from "../lib/translation";
 
 const newsInputSchema = z.object({
   slug: z.string().trim().min(1).max(200),
   titleId: z.string().trim().min(1).max(300),
-  titleEn: z.string().trim().min(1).max(300),
   excerptId: z.string().trim().max(1000).nullable().optional(),
-  excerptEn: z.string().trim().max(1000).nullable().optional(),
   contentId: z.string().trim().min(1),
-  contentEn: z.string().trim().min(1),
+  titleEn: z.string().trim().min(1).max(300).optional(),
+  excerptEn: z.string().trim().max(1000).nullable().optional(),
+  contentEn: z.string().trim().min(1).optional(),
   coverImage: z.string().trim().max(1000).nullable().optional(),
   status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).default("DRAFT"),
   publishedAt: z.coerce.date().nullable().optional(),
@@ -42,69 +48,37 @@ function normalizePublishedAt(
   return null;
 }
 
-async function translateText(
-  text: string,
-): Promise<string> {
-  const trimmed = text.trim();
+async function generateNewsEnglish(input: {
+  titleId: string;
+  excerptId?: string | null;
+  contentId: string;
+  titleEn?: string;
+  excerptEn?: string | null;
+  contentEn?: string;
+}) {
+  const [titleEn, excerptEn, contentEn] = await Promise.all([
+    input.titleEn?.trim()
+      ? input.titleEn.trim()
+      : translateIdToEn(input.titleId),
 
-  if (!trimmed) {
-    return "";
-  }
+    input.excerptEn !== undefined
+      ? input.excerptEn?.trim() || null
+      : translateOptionalIdToEn(input.excerptId),
 
-  const params = new URLSearchParams({
-    q: trimmed,
-    langpair: "id|en",
-  });
+    input.contentEn?.trim()
+      ? input.contentEn.trim()
+      : translateIdToEn(input.contentId),
+  ]);
 
-  const response = await fetch(
-    `https://api.mymemory.translated.net/get?${params.toString()}`,
-    {
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "JIDEX-2026/1.0",
-      },
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `Translation provider returned HTTP ${response.status}`,
-    );
-  }
-
-  const data: unknown = await response.json();
-
-  const parsed = z
-    .object({
-      responseStatus: z.number().optional(),
-      responseData: z
-        .object({
-          translatedText: z.string(),
-        })
-        .optional(),
-    })
-    .safeParse(data);
-
-  if (!parsed.success || !parsed.data.responseData?.translatedText) {
-    throw new Error("Translation provider returned invalid data");
-  }
-
-  if (
-    parsed.data.responseStatus !== undefined &&
-    parsed.data.responseStatus !== 200
-  ) {
-    throw new Error(
-      `Translation provider returned status ${parsed.data.responseStatus}`,
-    );
-  }
-
-  return parsed.data.responseData.translatedText.trim();
+  return {
+    titleEn,
+    excerptEn,
+    contentEn,
+  };
 }
 
 export async function newsAdminRoutes(app: FastifyInstance) {
   app.addHook("preHandler", async (request, reply) => {
-    const { authenticate, requireRole } = await import("../lib/auth");
-
     await authenticate(request, reply);
 
     if (reply.sent) {
@@ -114,11 +88,11 @@ export async function newsAdminRoutes(app: FastifyInstance) {
     await requireRole("OPERATOR", "ADMIN")(request, reply);
   });
 
-  app.get("/api/v1/admin/news", async () =>
-    prisma.news.findMany({
+  app.get("/api/v1/admin/news", async () => {
+    return prisma.news.findMany({
       orderBy: { updatedAt: "desc" },
-    }),
-  );
+    });
+  });
 
   app.get<{ Params: { id: string } }>(
     "/api/v1/admin/news/:id",
@@ -163,27 +137,47 @@ export async function newsAdminRoutes(app: FastifyInstance) {
       });
     }
 
-    const publishedAt = normalizePublishedAt(
-      data.status,
-      data.publishedAt,
-    );
+    try {
+      const translated = await generateNewsEnglish(data);
 
-    const news = await prisma.news.create({
-      data: {
-        slug: data.slug,
-        titleId: data.titleId,
-        titleEn: data.titleEn,
-        excerptId: data.excerptId ?? null,
-        excerptEn: data.excerptEn ?? null,
-        contentId: data.contentId,
-        contentEn: data.contentEn,
-        coverImage: data.coverImage ?? null,
-        status: data.status,
-        publishedAt,
-      },
-    });
+      const publishedAt = normalizePublishedAt(
+        data.status,
+        data.publishedAt,
+      );
 
-    return reply.status(201).send(news);
+      const news = await prisma.news.create({
+        data: {
+          slug: data.slug,
+          titleId: data.titleId,
+          titleEn: translated.titleEn,
+          excerptId: data.excerptId ?? null,
+          excerptEn: translated.excerptEn,
+          contentId: data.contentId,
+          contentEn: translated.contentEn,
+          coverImage: data.coverImage ?? null,
+          status: data.status,
+          publishedAt,
+        },
+      });
+
+      return reply.status(201).send(news);
+    } catch (error) {
+      request.log.error(
+        {
+          error:
+            error instanceof Error ? error.message : String(error),
+        },
+        "JIDEX news translation failed",
+      );
+
+      return reply.status(502).send({
+        error: "Translation service failed",
+        details:
+          error instanceof Error
+            ? error.message
+            : "Unknown translation error",
+      });
+    }
   });
 
   app.patch<{ Params: { id: string } }>(
@@ -226,53 +220,80 @@ export async function newsAdminRoutes(app: FastifyInstance) {
         }
       }
 
-      const nextStatus: NewsStatus =
-        data.status ?? existing.status;
+      try {
+        const titleId = data.titleId ?? existing.titleId;
+        const excerptId =
+          data.excerptId !== undefined
+            ? data.excerptId
+            : existing.excerptId;
+        const contentId = data.contentId ?? existing.contentId;
 
-      const nextPublishedAt = normalizePublishedAt(
-        nextStatus,
-        data.publishedAt !== undefined
-          ? data.publishedAt
-          : existing.publishedAt,
-      );
+        const translated = await generateNewsEnglish({
+          titleId,
+          excerptId,
+          contentId,
+          titleEn: data.titleEn ?? existing.titleEn,
+          excerptEn:
+            data.excerptEn !== undefined
+              ? data.excerptEn
+              : existing.excerptEn,
+          contentEn: data.contentEn ?? existing.contentEn,
+        });
 
-      const news = await prisma.news.update({
-        where: {
-          id: request.params.id,
-        },
-        data: {
-          ...(data.slug !== undefined && {
-            slug: data.slug,
-          }),
-          ...(data.titleId !== undefined && {
-            titleId: data.titleId,
-          }),
-          ...(data.titleEn !== undefined && {
-            titleEn: data.titleEn,
-          }),
-          ...(data.excerptId !== undefined && {
-            excerptId: data.excerptId,
-          }),
-          ...(data.excerptEn !== undefined && {
-            excerptEn: data.excerptEn,
-          }),
-          ...(data.contentId !== undefined && {
-            contentId: data.contentId,
-          }),
-          ...(data.contentEn !== undefined && {
-            contentEn: data.contentEn,
-          }),
-          ...(data.coverImage !== undefined && {
-            coverImage: data.coverImage,
-          }),
-          ...(data.status !== undefined && {
-            status: data.status,
-          }),
-          publishedAt: nextPublishedAt,
-        },
-      });
+        const nextStatus: NewsStatus =
+          data.status ?? existing.status;
 
-      return news;
+        const nextPublishedAt = normalizePublishedAt(
+          nextStatus,
+          data.publishedAt !== undefined
+            ? data.publishedAt
+            : existing.publishedAt,
+        );
+
+        const news = await prisma.news.update({
+          where: {
+            id: request.params.id,
+          },
+          data: {
+            ...(data.slug !== undefined && {
+              slug: data.slug,
+            }),
+            titleId,
+            titleEn: translated.titleEn,
+            excerptId,
+            excerptEn: translated.excerptEn,
+            contentId,
+            contentEn: translated.contentEn,
+            ...(data.coverImage !== undefined && {
+              coverImage: data.coverImage,
+            }),
+            ...(data.status !== undefined && {
+              status: data.status,
+            }),
+            publishedAt: nextPublishedAt,
+          },
+        });
+
+        return news;
+      } catch (error) {
+        request.log.error(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : String(error),
+          },
+          "JIDEX news translation failed",
+        );
+
+        return reply.status(502).send({
+          error: "Translation service failed",
+          details:
+            error instanceof Error
+              ? error.message
+              : "Unknown translation error",
+        });
+      }
     },
   );
 
@@ -303,18 +324,11 @@ export async function newsAdminRoutes(app: FastifyInstance) {
       }
 
       try {
-        const [titleEn, excerptEn, contentEn] =
-          await Promise.all([
-            translateText(parsed.data.titleId),
-            translateText(parsed.data.excerptId ?? ""),
-            translateText(parsed.data.contentId),
-          ]);
-
-        const translated = {
-          titleEn,
-          excerptEn: excerptEn || null,
-          contentEn,
-        };
+        const translated = await generateNewsEnglish({
+          titleId: parsed.data.titleId,
+          excerptId: parsed.data.excerptId,
+          contentId: parsed.data.contentId,
+        });
 
         const validated =
           translateResponseSchema.safeParse(translated);

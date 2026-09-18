@@ -4,7 +4,10 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { useLanguage, type Language } from "@/components/i18n/language-provider";
+import {
+  useLanguage,
+  type Language,
+} from "@/components/i18n/language-provider";
 import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
 
@@ -60,11 +63,27 @@ const copy: Record<
   },
 };
 
+function redirectByRole(
+  role: "PARTICIPANT" | "OPERATOR" | "ADMIN",
+  router: ReturnType<typeof useRouter>,
+) {
+  if (role === "ADMIN") {
+    router.replace("/admin");
+    return;
+  }
+
+  if (role === "OPERATOR") {
+    router.replace("/operator/news");
+    return;
+  }
+
+  router.replace("/");
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { language } = useLanguage();
   const { user, loading, login } = useAuth();
-
   const t = copy[language];
 
   const [email, setEmail] = useState("");
@@ -77,12 +96,7 @@ export default function LoginPage() {
       return;
     }
 
-    if (user.role === "OPERATOR" || user.role === "ADMIN") {
-      router.replace("/operator/news");
-      return;
-    }
-
-    router.replace("/");
+    redirectByRole(user.role, router);
   }, [loading, user, router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -97,25 +111,11 @@ export default function LoginPage() {
       setSubmitting(true);
       setError("");
 
-      const loggedInUser = await login(
-        email.trim(),
-        password,
-      );
+      const loggedInUser = await login(email.trim(), password);
 
-      if (
-        loggedInUser.role === "OPERATOR" ||
-        loggedInUser.role === "ADMIN"
-      ) {
-        router.replace("/operator/news");
-      } else {
-        router.replace("/");
-      }
+      redirectByRole(loggedInUser.role, router);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : t.invalid,
-      );
+      setError(err instanceof Error ? err.message : t.invalid);
     } finally {
       setSubmitting(false);
     }
@@ -160,10 +160,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            <form
-              onSubmit={handleSubmit}
-              className="mt-8 space-y-5"
-            >
+            <form onSubmit={handleSubmit} className="mt-8 space-y-5">
               <div>
                 <label
                   htmlFor="email"
@@ -178,9 +175,7 @@ export default function LoginPage() {
                   type="email"
                   autoComplete="email"
                   value={email}
-                  onChange={(event) =>
-                    setEmail(event.target.value)
-                  }
+                  onChange={(event) => setEmail(event.target.value)}
                   placeholder={t.emailPlaceholder}
                   disabled={submitting}
                   required
@@ -202,9 +197,7 @@ export default function LoginPage() {
                   type="password"
                   autoComplete="current-password"
                   value={password}
-                  onChange={(event) =>
-                    setPassword(event.target.value)
-                  }
+                  onChange={(event) => setPassword(event.target.value)}
                   placeholder={t.passwordPlaceholder}
                   disabled={submitting}
                   required
@@ -234,9 +227,7 @@ export default function LoginPage() {
 
               <div className="mt-5">
                 <Link href="/">
-                  <Button variant="outline">
-                    {t.home}
-                  </Button>
+                  <Button variant="outline">{t.home}</Button>
                 </Link>
               </div>
             </div>

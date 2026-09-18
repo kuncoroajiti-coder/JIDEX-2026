@@ -10,6 +10,7 @@ import { newsAdminRoutes } from "./routes/news-admin";
 import { authRoutes } from "./routes/auth";
 import { participantRoutes } from "./routes/participant";
 import { importRoutes } from "./routes/import";
+import { adminUsersRoutes } from "./routes/admin-users";
 
 const envSchema = z.object({
   NODE_ENV: z
@@ -46,6 +47,7 @@ const start = async () => {
     await app.register(authRoutes);
     await app.register(participantRoutes);
     await app.register(importRoutes);
+    await app.register(adminUsersRoutes);
 
     app.get("/health", async () => ({
       ok: true,

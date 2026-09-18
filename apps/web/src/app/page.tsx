@@ -10,6 +10,7 @@ import {
   useLanguage,
 } from "@/components/i18n/language-provider";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth/auth-provider";
 import { getNews, type NewsItem } from "@/lib/api";
 
 const content = {
@@ -25,6 +26,7 @@ const content = {
     date: "5–16 Oktober 2026",
     location: "Jakarta, Indonesia",
     participant: "Daftar sebagai Peserta",
+    participantPortal: "Buka Portal Peserta",
     explore: "Jelajahi JIDEX",
     visualAlt: "Visual pameran, desain, dan fashion JIDEX 2026",
     countdownLabel: "Menuju JIDEX 2026",
@@ -94,6 +96,7 @@ const content = {
     date: "5–16 October 2026",
     location: "Jakarta, Indonesia",
     participant: "Register as Participant",
+    participantPortal: "Open Participant Portal",
     explore: "Explore JIDEX",
     visualAlt: "JIDEX 2026 exhibition, design and fashion visual",
     countdownLabel: "Until JIDEX 2026",
@@ -246,6 +249,8 @@ function Countdown({ language }: { language: Language }) {
 
 export default function Home() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  const isParticipant = !authLoading && user?.role === "PARTICIPANT";
   const { language } = useLanguage();
   const t = content[language];
   const [apiNews, setApiNews] = useState<NewsItem[]>([]);
@@ -320,8 +325,14 @@ export default function Home() {
                 <span>{t.location}</span>
               </div>
               <div className="mt-7 flex flex-wrap gap-3">
-                <Button size="lg" type="button" onClick={() => router.push("/register")}>
-                  {t.participant}
+                <Button
+                  size="lg"
+                  type="button"
+                  onClick={() =>
+                    router.push(isParticipant ? "/participant" : "/register")
+                  }
+                >
+                  {isParticipant ? t.participantPortal : t.participant}
                 </Button>
                 <Button variant="outline" size="lg" type="button" onClick={() => router.push("/about")}>
                   {t.explore}
@@ -596,8 +607,15 @@ export default function Home() {
               </p>
             </div>
             <div className="relative mt-5 shrink-0 sm:mt-0">
-              <Button variant="accent" size="lg" type="button" onClick={() => router.push("/register")}>
-                {t.ctaButton} →
+              <Button
+                variant="accent"
+                size="lg"
+                type="button"
+                onClick={() =>
+                  router.push(isParticipant ? "/participant" : "/register")
+                }
+              >
+                {isParticipant ? t.participantPortal : t.ctaButton} →
               </Button>
             </div>
           </div>
